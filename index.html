@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Entrenador Personal — Transforma tu cuerpo y tu juego</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script>
+tailwind.config={ theme:{ extend:{
+  fontFamily:{ display:['Fraunces','serif'], body:['DM Sans','sans-serif'] },
+  colors:{ paper:'#f5f2ec', ink:'#1a1c1a', moss:'#3f6b4f', sage:'#7c9885', clay:'#c2703d' }
+}}}
+</script>
+<style>
+  *{ box-sizing:border-box; } html{ scroll-behavior:smooth; }
+  body{ background:#f5f2ec; color:#1a1c1a; font-family:'DM Sans',sans-serif; overflow-x:hidden; }
+  ::selection{ background:#3f6b4f; color:#f5f2ec; }
+  #spores{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .layer{ position:relative; z-index:10; }
+  section{ background:rgba(245,242,236,.55); backdrop-filter:blur(2px); }
+  .reveal{ opacity:0; transform:translateY(28px); transition:opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+  .reveal.show{ opacity:1; transform:translateY(0); }
+  .barfill{ transition:width 1.4s cubic-bezier(.2,.7,.2,1); }
+
+  /* ── efectos 3D e interacción ── */
+  .cards3d{ perspective:1200px; }
+  .card3d{ position:relative; overflow:hidden; transform-style:preserve-3d;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease;
+    box-shadow:0 4px 16px -10px rgba(26,28,26,.2); }
+  .card3d:hover{ box-shadow:0 26px 55px -20px var(--csh,rgba(63,107,79,.45)), 0 8px 20px -14px rgba(26,28,26,.25); }
+  .card3d::after{ content:''; position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .4s;
+    background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.6) 48%,transparent 64%); transform:translateX(-60%); }
+  .card3d:hover::after{ opacity:1; animation:sheen .9s ease; }
+  @keyframes sheen{ from{transform:translateX(-60%)} to{transform:translateX(60%)} }
+  .card3d .c-ico, .card3d h3{ transition:transform .4s cubic-bezier(.2,.8,.2,1); transform:translateZ(0); }
+  .card3d:hover .c-ico{ transform:translateZ(40px) scale(1.12); }
+  .card3d:hover h3{ transform:translateZ(24px); }
+
+  /* botones con empuje 3D y brillo */
+  .btn3d{ position:relative; overflow:hidden; transition:transform .2s ease, box-shadow .25s ease, background .25s ease; transform:translateZ(0); }
+  .btn3d:hover{ transform:translateY(-3px) scale(1.03); box-shadow:0 14px 26px -12px rgba(26,28,26,.5); }
+  .btn3d:active{ transform:translateY(0) scale(.97); }
+  .btn3d::before{ content:''; position:absolute; top:0; left:-120%; width:60%; height:100%; transform:skewX(-20deg);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent); transition:left .5s ease; }
+  .btn3d:hover::before{ left:140%; }
+
+  /* foto hero con tilt */
+  .photo3d{ transition:transform .4s cubic-bezier(.2,.8,.2,1), box-shadow .4s ease; transform-style:preserve-3d; will-change:transform; }
+
+  /* ── Álbum circular 3D (coverflow) ── */
+  .album-stage{ position:relative; width:340px; height:420px; perspective:1100px; }
+  .album{ position:absolute; inset:0; transform-style:preserve-3d; transition:transform .8s cubic-bezier(.25,.8,.3,1); }
+  .album .slide{ position:absolute; top:50%; left:50%; width:240px; height:340px; margin:-170px 0 0 -120px;
+    border-radius:1.4rem; overflow:hidden; border:3px solid var(--paper);
+    box-shadow:0 20px 50px -18px rgba(26,28,26,.55); backface-visibility:hidden; transition:filter .6s ease; }
+  .album .slide img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .album .slide::after{ content:''; position:absolute; inset:0; background:rgba(26,28,26,.45); opacity:0; transition:opacity .6s; }
+  .album .slide:not(.is-front)::after{ opacity:1; }
+  .album-nav{ position:absolute; top:50%; transform:translateY(-50%); z-index:5;
+    width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:rgba(245,242,236,.9);
+    color:var(--ink); font-size:1.4rem; line-height:1; cursor:pointer; transition:.25s; backdrop-filter:blur(4px); }
+  .album-nav:hover{ background:var(--accent); color:var(--paper); border-color:var(--accent); }
+  .album-nav.prev{ left:-8px; } .album-nav.next{ right:-8px; }
+  .album-dots{ position:absolute; bottom:-26px; left:0; right:0; display:flex; gap:7px; justify-content:center; }
+  .album-dots i{ width:7px; height:7px; border-radius:50%; background:var(--line); transition:.3s; cursor:pointer; }
+  .album-dots i.on{ background:var(--accent); transform:scale(1.3); }
+
+</style>
+</head>
+<body>
+<canvas id="spores"></canvas>
+
+<div class="layer">
+
+  <!-- NAV -->
+  <nav class="fixed top-0 inset-x-0 z-50 backdrop-blur-md bg-paper/70 border-b border-ink/10">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <a href="#top" class="font-display text-xl tracking-wide">Entrena<span class="text-clay italic"> · personal</span></a>
+      <div class="hidden md:flex gap-8 text-sm text-ink/60">
+        <a href="#sobre" class="hover:text-clay transition">Sobre mí</a>
+        <a href="#servicios" class="hover:text-clay transition">Servicios</a>
+        <a href="#resultados" class="hover:text-clay transition">Resultados</a>
+        <a href="#contacto" class="btn3d bg-ink text-paper px-4 py-2 rounded-full hover:bg-clay transition">Reserva sesión</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header id="top" class="min-h-screen flex items-center px-6 pt-24">
+    <div class="max-w-6xl mx-auto w-full grid md:grid-cols-2 gap-10 items-center">
+      <div>
+        <p class="text-xs tracking-[0.3em] uppercase text-clay mb-5 reveal">Entrenador Personal Certificado</p>
+        <h1 class="font-display font-light leading-[0.95] text-5xl md:text-7xl reveal">Tu mejor <em class="text-clay">versión</em> empieza hoy.</h1>
+        <p class="mt-6 text-ink/70 text-lg max-w-md reveal">Entrenamiento personalizado para conseguir resultados reales: fuerza, forma física y mentalidad. Te acompaño en cada paso del camino.</p>
+        <div class="mt-8 flex gap-3 reveal">
+          <a href="#contacto" class="btn3d bg-ink text-paper px-7 py-3 rounded-full font-medium hover:bg-clay transition">Empieza ahora</a>
+          <a href="#resultados" class="btn3d border border-ink/30 px-7 py-3 rounded-full hover:border-clay hover:text-clay transition">Ver resultados</a>
+        </div>
+        <div class="mt-10 flex gap-8 reveal">
+          <div><div class="font-display text-3xl text-moss">22</div><div class="text-xs text-ink/50 uppercase tracking-wide">Años</div></div>
+          <div><div class="font-display text-3xl text-moss">15+</div><div class="text-xs text-ink/50 uppercase tracking-wide">Años de fútbol</div></div>
+          <div><div class="font-display text-3xl text-moss">1:1</div><div class="text-xs text-ink/50 uppercase tracking-wide">Atención</div></div>
+        </div>
+      </div>
+      <div class="reveal hidden md:flex justify-center">
+        <div class="album-stage">
+          <div class="album" id="album"></div>
+          <button class="album-nav prev" id="albumPrev" aria-label="Anterior">‹</button>
+          <button class="album-nav next" id="albumNext" aria-label="Siguiente">›</button>
+          <div class="album-dots" id="albumDots"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SOBRE MÍ -->
+  <section id="sobre" class="py-28 px-6 border-t border-ink/10">
+    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-14 items-center">
+      <div>
+        <p class="text-xs tracking-[0.26em] uppercase text-clay mb-4">Sobre mí</p>
+        <h2 class="font-display font-light text-4xl md:text-5xl reveal">Deporte en la sangre, <em class="text-clay">método</em> en el entreno.</h2>
+        <p class="mt-6 text-ink/70 leading-relaxed reveal">Tengo 22 años y he jugado al fútbol toda mi vida. Ese recorrido me dio disciplina, constancia y un conocimiento real del cuerpo en movimiento.</p>
+        <p class="mt-4 text-ink/70 leading-relaxed reveal">Ahora, con mi <strong class="text-ink">curso de entrenamiento personal</strong>, ayudo a otras personas a alcanzar sus objetivos con planes a medida, seguros y efectivos.</p>
+      </div>
+      <div class="grid grid-cols-2 gap-px bg-ink/10 border border-ink/10 reveal">
+        <div class="bg-paper p-7"><div class="font-display text-3xl text-moss">22</div><div class="text-sm text-ink/60 mt-1">Años</div></div>
+        <div class="bg-paper p-7"><div class="font-display text-3xl text-moss">1,83 m</div><div class="text-sm text-ink/60 mt-1">Altura</div></div>
+        <div class="bg-paper p-7"><div class="font-display text-3xl text-moss">7x kg</div><div class="text-sm text-ink/60 mt-1">Peso</div></div>
+        <div class="bg-paper p-7"><div class="font-display text-3xl text-moss">Cert.</div><div class="text-sm text-ink/60 mt-1">Entrenador personal</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVICIOS -->
+  <section id="servicios" class="py-28 px-6 border-t border-ink/10">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs tracking-[0.26em] uppercase text-clay mb-4">Servicios</p>
+      <h2 class="font-display font-light text-4xl md:text-5xl mb-12 reveal">Cómo puedo <em class="text-clay">ayudarte</em></h2>
+      <div class="grid md:grid-cols-3 gap-6 cards3d">
+        <div class="reveal card3d bg-paper border border-ink/10 rounded-2xl p-8" style="--csh:rgba(194,112,61,.4)">
+          <div class="c-ico font-display text-2xl text-clay mb-3">01</div>
+          <h3 class="font-display text-2xl mb-2">Entreno personalizado</h3>
+          <p class="text-ink/60 text-sm leading-relaxed">Plan a tu medida según tu nivel, objetivos y tiempo. Sesiones 1:1 con seguimiento total.</p>
+        </div>
+        <div class="reveal card3d bg-paper border border-ink/10 rounded-2xl p-8" style="--csh:rgba(63,107,79,.4)">
+          <div class="c-ico font-display text-2xl text-clay mb-3">02</div>
+          <h3 class="font-display text-2xl mb-2">Preparación física</h3>
+          <p class="text-ink/60 text-sm leading-relaxed">Fuerza, resistencia y movilidad enfocadas al deporte. Ideal para futbolistas y deportistas.</p>
+        </div>
+        <div class="reveal card3d bg-paper border border-ink/10 rounded-2xl p-8" style="--csh:rgba(124,152,133,.45)">
+          <div class="c-ico font-display text-2xl text-clay mb-3">03</div>
+          <h3 class="font-display text-2xl mb-2">Hábitos y motivación</h3>
+          <p class="text-ink/60 text-sm leading-relaxed">Te ayudo a crear rutina, constancia y mentalidad para que los resultados duren.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTADOS -->
+  <section id="resultados" class="py-28 px-6 border-t border-ink/10">
+    <div class="max-w-6xl mx-auto">
+      <p class="text-xs tracking-[0.26em] uppercase text-clay mb-4">Resultados</p>
+      <h2 class="font-display font-light text-4xl md:text-5xl mb-4 reveal">Las <em class="text-clay">mejoras</em> que vas a conseguir</h2>
+      <p class="text-ink/60 max-w-xl mb-12 reveal">Con un plan constante y bien guiado, esto es lo que mis clientes mejoran de media en pocas semanas.</p>
+      <div class="grid md:grid-cols-2 gap-x-14 gap-y-7 max-w-3xl">
+        <div class="reveal"><div class="flex justify-between text-sm mb-2"><span>Fuerza</span><span class="text-moss font-semibold">+35%</span></div><div class="h-2 rounded-full bg-ink/10"><div class="barfill h-2 rounded-full bg-moss" style="width:0" data-w="85%"></div></div></div>
+        <div class="reveal"><div class="flex justify-between text-sm mb-2"><span>Resistencia</span><span class="text-moss font-semibold">+40%</span></div><div class="h-2 rounded-full bg-ink/10"><div class="barfill h-2 rounded-full bg-moss" style="width:0" data-w="90%"></div></div></div>
+        <div class="reveal"><div class="flex justify-between text-sm mb-2"><span>Composición corporal</span><span class="text-moss font-semibold">Notable</span></div><div class="h-2 rounded-full bg-ink/10"><div class="barfill h-2 rounded-full bg-moss" style="width:0" data-w="80%"></div></div></div>
+        <div class="reveal"><div class="flex justify-between text-sm mb-2"><span>Energía y confianza</span><span class="text-moss font-semibold">Alta</span></div><div class="h-2 rounded-full bg-ink/10"><div class="barfill h-2 rounded-full bg-moss" style="width:0" data-w="95%"></div></div></div>
+      </div>
+      <div class="mt-14 grid md:grid-cols-3 gap-6">
+        <div class="reveal bg-paper border border-ink/10 rounded-2xl p-7 italic text-ink/70">"En dos meses noté un cambio brutal. Más fuerte y con más energía que nunca." <div class="not-italic mt-3 text-sm text-ink/50">— Cliente satisfecho</div></div>
+        <div class="reveal bg-paper border border-ink/10 rounded-2xl p-7 italic text-ink/70">"Me motiva en cada sesión y se nota que sabe lo que hace." <div class="not-italic mt-3 text-sm text-ink/50">— Cliente satisfecho</div></div>
+        <div class="reveal bg-paper border border-ink/10 rounded-2xl p-7 italic text-ink/70">"Por fin un plan que se adapta a mí y a mi horario." <div class="not-italic mt-3 text-sm text-ink/50">— Cliente satisfecho</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACTO -->
+  <section id="contacto" class="py-28 px-6 border-t border-ink/10 text-center">
+    <div class="max-w-2xl mx-auto">
+      <p class="text-xs tracking-[0.26em] uppercase text-clay mb-4">Contacto</p>
+      <h2 class="font-display font-light text-4xl md:text-6xl reveal">¿Empezamos a <em class="text-clay">entrenar</em>?</h2>
+      <p class="mt-5 text-ink/70 reveal">Cuéntame tu objetivo y diseñamos juntos tu plan. Primera consulta sin compromiso.</p>
+      <div class="mt-9 flex flex-wrap gap-3 justify-center reveal">
+        <a href="tel:+34691342480" class="btn3d bg-ink text-paper px-8 py-3.5 rounded-full font-medium hover:bg-clay transition">📞 Llámame</a>
+        <a href="https://wa.me/34691342480" target="_blank" rel="noopener" class="btn3d bg-moss text-paper px-8 py-3.5 rounded-full font-medium hover:opacity-90 transition">💬 WhatsApp</a>
+        <a href="mailto:8corama@gmail.com" class="btn3d border border-ink/30 px-8 py-3.5 rounded-full hover:border-clay hover:text-clay transition">✉️ Email</a>
+      </div>
+      <div class="mt-10 flex flex-wrap gap-x-8 gap-y-2 justify-center text-sm text-ink/60 reveal">
+        <span>📍 Mallorca</span>
+        <span>🕒 Lun–Sáb · 8:00–21:00</span>
+        <span>📱 691 34 24 80</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER con crédito ARTEweb -->
+  <footer class="py-8 px-6 border-t border-ink/10">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3 text-sm text-ink/50">
+      <span class="font-display">Entrena<span class="text-clay italic"> · personal</span></span>
+      <span>© 2025 · Entrenador personal</span>
+      <a href="#" class="hover:text-clay transition">Hecho por <strong class="font-display not-italic">ARTE<span class="text-clay italic">web</span></strong></a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// ── Esporas estilo ARTEweb ──
+(function(){
+  const c=document.getElementById('spores'), ctx=c.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let w,h,sp=[];
+  const pal=[[63,107,79],[124,152,133],[194,112,61],[26,28,26]];
+  function resize(){
+    w=c.width=innerWidth*devicePixelRatio; h=c.height=innerHeight*devicePixelRatio;
+    c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px';
+    const n=Math.min(80,Math.round(innerWidth*innerHeight/17000)); sp=[];
+    for(let i=0;i<n;i++){ const col=pal[Math.random()<0.1?3:Math.floor(Math.random()*3)];
+      sp.push({x:Math.random()*w,y:Math.random()*h,r:(Math.random()*1.6+0.6)*devicePixelRatio,col,
+        a:Math.random()*0.32+0.12,sx:(Math.random()-0.5)*0.14*devicePixelRatio,
+        sy:-(Math.random()*0.24+0.05)*devicePixelRatio,ph:Math.random()*6.28}); }
+  }
+  function draw(t){
+    ctx.clearRect(0,0,w,h);
+    for(const s of sp){ s.x+=s.sx+Math.sin(t*0.0004+s.ph)*0.1*devicePixelRatio; s.y+=s.sy;
+      if(s.y<-10){ s.y=h+10; s.x=Math.random()*w; } if(s.x<-10)s.x=w+10; if(s.x>w+10)s.x=-10;
+      const pulse=0.7+Math.sin(t*0.001+s.ph)*0.3;
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28);
+      ctx.fillStyle=`rgba(${s.col[0]},${s.col[1]},${s.col[2]},${s.a*pulse})`; ctx.fill(); }
+    requestAnimationFrame(draw);
+  }
+  resize(); addEventListener('resize',resize);
+  if(!reduce) requestAnimationFrame(draw);
+  else { ctx.clearRect(0,0,w,h); for(const s of sp){ ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28);
+    ctx.fillStyle=`rgba(${s.col[0]},${s.col[1]},${s.col[2]},${s.a})`; ctx.fill(); } }
+})();
+
+// ── reveal + barras ──
+const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){
+  e.target.classList.add('show');
+  e.target.querySelectorAll('.barfill').forEach(b=>b.style.width=b.dataset.w);
+  io.unobserve(e.target);
+}});},{threshold:.14});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// ── tilt 3D siguiendo el cursor (tarjetas + foto) ──
+if(!matchMedia('(hover:none)').matches){
+  // tarjetas de servicios
+  document.querySelectorAll('.card3d').forEach(card=>{
+    card.addEventListener('mousemove',e=>{
+      const r=card.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width-.5, py=(e.clientY-r.top)/r.height-.5;
+      card.style.transition='transform .1s ease, box-shadow .35s ease';
+      card.style.transform=`translateY(-6px) rotateX(${(-py*8).toFixed(2)}deg) rotateY(${(px*10).toFixed(2)}deg)`;
+    });
+    card.addEventListener('mouseleave',()=>{
+      card.style.transition='transform .5s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease';
+      card.style.transform='';
+    });
+  });
+}
+
+// ── Álbum circular 3D ──
+(function(){
+  const album=document.getElementById('album');
+  if(!album) return;
+  const imgs=[
+    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=700&q=80',
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=700&q=80',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=700&q=80',
+    'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=700&q=80',
+    'https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=700&q=80',
+    'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=700&q=80',
+    'https://images.unsplash.com/photo-1605296867304-46d5465a13f1?w=700&q=80',
+    'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=700&q=80',
+  ];
+  const N=imgs.length;
+  const radius=300;                       // más compacto (antes 380)
+  const step=360/N;
+  let cur=0, timer=null;
+
+  imgs.forEach((src,i)=>{
+    const s=document.createElement('div');
+    s.className='slide';
+    s.style.transform=`rotateY(${i*step}deg) translateZ(${radius}px)`;
+    s.innerHTML=`<img src="${src}" alt="Entrenamiento ${i+1}" loading="lazy">`;
+    album.appendChild(s);
+  });
+  const slides=[...album.querySelectorAll('.slide')];
+
+  const dots=document.getElementById('albumDots');
+  imgs.forEach((_,i)=>{ const d=document.createElement('i'); d.onclick=()=>go(i); dots.appendChild(d); });
+  const dotEls=[...dots.querySelectorAll('i')];
+
+  function render(){
+    album.style.transform=`translateZ(-${radius}px) rotateY(${-cur*step}deg)`;
+    slides.forEach((s,i)=>s.classList.toggle('is-front', ((i%N)+N)%N === ((cur%N)+N)%N));
+    dotEls.forEach((d,i)=>d.classList.toggle('on', i===((cur%N)+N)%N));
+  }
+  function go(i){ cur=i; render(); restart(); }
+  function next(){ cur++; render(); }
+  function prev(){ cur--; render(); }
+  function restart(){ clearInterval(timer); timer=setInterval(next,3500); }
+
+  document.getElementById('albumNext').onclick=()=>{ next(); restart(); };
+  document.getElementById('albumPrev').onclick=()=>{ prev(); restart(); };
+
+  // arrastrar para girar
+  let down=false,sx=0,moved=false;
+  const stage=album.parentElement;
+  stage.addEventListener('mousedown',e=>{ down=true; sx=e.clientX; moved=false; clearInterval(timer); });
+  addEventListener('mousemove',e=>{ if(!down) return; if(Math.abs(e.clientX-sx)>60){ (e.clientX<sx?next:prev)(); sx=e.clientX; moved=true; } });
+  addEventListener('mouseup',()=>{ if(down){ down=false; restart(); } });
+
+  render(); restart();
+})();
+</script>
+</body>
+</html>
